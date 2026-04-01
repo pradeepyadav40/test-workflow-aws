@@ -35,33 +35,33 @@ locals {
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
-    ManagedBy   = "terraform"
+    ManagedBy   = "terraform-mock"
   }
 }
 
 # Example infrastructure: an S3 bucket for artifacts or static hosting
-resource "aws_s3_bucket" "app_bucket" {
-  bucket = "${var.project_name}-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
+#resource "aws_s3_bucket" "app_bucket" {
+ # bucket = "${var.project_name}-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
 
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-bucket"
-  })
-}
+  #tags = merge(local.common_tags, {
+   # Name = "${var.project_name}-${var.environment}-bucket"
+ # })
+#}
 
-resource "aws_s3_bucket_public_access_block" "app_bucket_block" {
-  bucket = aws_s3_bucket.app_bucket.id
+#resource "aws_s3_bucket_public_access_block" "app_bucket_block" {
+ # bucket = aws_s3_bucket.app_bucket.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
+ # block_public_acls       = true
+  #block_public_policy     = true
+  #ignore_public_acls      = true
+  #restrict_public_buckets = true
+#}
 
-data "aws_caller_identity" "current" {}
+#data "aws_caller_identity" "current" {}
 
-data "aws_region" "current" {}
+#data "aws_region" "current" {}
 
-output "bucket_name" {
+output "mock_output" {
   description = "Name of the created S3 bucket"
-  value       = aws_s3_bucket.app_bucket.bucket
+  value       = "mock_success"
 }
