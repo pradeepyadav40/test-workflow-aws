@@ -26,11 +26,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
+     # - name: Configure AWS credentials (OIDC)
+      #  uses: aws-actions/configure-aws-credentials@v4
+      #  with:
+        #  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        #  aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -57,11 +57,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
+     # - name: Configure AWS credentials (OIDC)
+       # uses: aws-actions/configure-aws-credentials@v4
+      #  with:
+        #  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        #  aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -105,11 +105,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
+    #  - name: Configure AWS credentials (OIDC)
+   #     uses: aws-actions/configure-aws-credentials@v4
+   #     with:
+     #     role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        #  aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
