@@ -1,18 +1,27 @@
-name: CI/CD - Terraform on AWS
+name: CI/CD - Terraform on Azure
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy.yml'
+      - 'infra/**'
+      - 'README.md'
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+  workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
+  pull-requests: write
 
 env:
-  AWS_REGION: us-east-1
-  TF_VERSION: 1.14.7
+  TF_VERSION: '1.14.7'
   TF_WORKING_DIR: infra
 
 jobs:
@@ -20,26 +29,23 @@ jobs:
     name: Validate Terraform
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-     # - name: Configure AWS credentials (OIDC)
-      #  uses: aws-actions/configure-aws-credentials@v4
-      #  with:
-        #  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-        #  aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Terraform Init
+      - name: Terraform Format
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -input=false
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init (validation)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -backend=false
 
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -49,6 +55,8 @@ jobs:
     name: Terraform Plan
     runs-on: ubuntu-latest
     needs: validate
+    environment:
+      name: staging
     permissions:
       id-token: write
       contents: read
@@ -57,47 +65,60 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-     # - name: Configure AWS credentials (OIDC)
-       # uses: aws-actions/configure-aws-credentials@v4
-      #  with:
-        #  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-        #  aws-region: ${{ env.AWS_REGION }}
+      - name: Azure login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -input=false
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: terraform init
 
       - name: Terraform Plan
         id: tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -input=false -no-color -out=tfplan.binary
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          terraform plan -input=false -out=tfplan.binary
+          terraform show -no-color tfplan.binary > tfplan.txt
 
-      - name: Show Terraform Plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform show -no-color tfplan.binary > tfplan.txt
-
-      - name: Upload Plan Artifact
+      - name: Upload plan artifact
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan
-          path: infra/tfplan.txt
+          name: tfplan
+          path: infra/tfplan.binary
 
-      - name: Comment Plan on PR
+      - name: Comment plan on PR
         if: github.event_name == 'pull_request'
-        uses: mshick/add-pr-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v2
         with:
-          message-path: infra/tfplan.txt
+          recreate: true
+          path: infra/tfplan.txt
 
   apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
     needs: plan
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: ${{ steps.outputs_step.outputs.resource_group_url || '' }}
     permissions:
       id-token: write
       contents: read
@@ -105,26 +126,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-    #  - name: Configure AWS credentials (OIDC)
-   #     uses: aws-actions/configure-aws-credentials@v4
-   #     with:
-     #     role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-        #  aws-region: ${{ env.AWS_REGION }}
+      - name: Azure login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Terraform
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: infra
+
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -input=false
-
-      - name: Terraform Plan (for apply)
-        id: tfplan_apply
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform plan -input=false -no-color -out=tfplan.binary
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: terraform init
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -input=false -auto-approve tfplan.binary
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: terraform apply -input=false tfplan.binary
+
+      - name: Output resource group URL
+        id: outputs_step
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          RG_NAME=$(terraform output -raw resource_group_name || echo '')
+          if [ -n "$RG_NAME" ]; then
+            echo "resource_group_url=https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Resources%2FResourceGroups" >> $GITHUB_OUTPUT
+          fi
